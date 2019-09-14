@@ -1,0 +1,927 @@
+TKS = 177560
+TKB = 177562
+TPS = 177564
+TPB = 177566
+LCS = 177546
+LF  = 10.
+CR  = 13.
+BckSpce  = 8.
+SPACE  = 32.
+. = torg + 2000
+inputSTR: .blkw 50.
+RowsMSG:	.ascii<Please enter number of rows:> 
+.byte CR,LF,0
+ColsMSG:	.ascii<Please enter number of columns:> 
+.byte CR,LF,0
+DurMSG: .ascii<Please enter game duration in seconds and max number of moves:>
+.byte CR,LF,0
+BoardMSG:	.ascii<Please enter the board:> 
+.byte CR,LF,0
+setMSG:	.ascii<We are all set. Total time: > 
+.byte 0
+MaxMvMSG:	.ascii<Max number of allowed moves: >
+.byte 0
+EndMSG: 		.ascii<Time's up. Game Over!>
+.byte 0
+FinalMVS: 	.ascii<Final Moves: >
+.byte 0
+WellDone: 	.ascii<Well done, you won!>
+.byte 0
+secs:	.ascii< sec>
+.byte 0
+pMoves:		.ascii< moves>
+.byte 0
+enter:		.ascii<Press Enter key when you are ready...>
+.byte 0
+space:     .ascii< >
+.byte 0
+Moves:	.ascii<Moves: >
+.byte 0
+movesLeft:	.ascii< moves left, please enter your move:>
+.byte 0
+pNoMoves:	.ascii<No more moves allowed. Game Over!>
+.byte 0
+pIllMove:	.ascii<Illegal move. Try again>
+.byte 0
+pCurr:     .ascii<Current Board:>
+.byte 0
+.even
+toPrint: .blkw 1.
+Enter: .byte CR,LF,0
+.even
+nRows: .blkw 2.
+nCols: .blkw 1.
+maxMoves: .blkw 2.
+.byte 0
+.even
+duration: .blkw 4.
+.byte 0
+.even
+moveNum: .blkw 1.
+durNum: .blkw 1.
+movesArray: .blkw 120.
+board: .blkw 128.
+times_up: .blkw 1.
+
+cln_mask: .word 177600
+chr_num_msk: .word 70
+busy: .word 0
+ptr: .word 0
+Cord: .blkw 1.
+count1:	.word 0.
+count2:	.word 0.
+EnterCond:    .word 0.
+X: .blkw 1.
+Y: .blkw 1.
+tmp: .blkw 1.
+Dir: .blkw 1.
+win_b_flag: .word 0.
+Finish: .blkw 1.
+
+main: mov #input_func, @#60			;initialize keyboard inter subroutine
+	mov #200, @#62
+	mov #output_func, @#64			;initialize printer inter subroutine
+	mov #200, @#66
+	mov #io_trap, @#20 		;initialize iot trap subroutine
+	mov #200, @#22
+	mov #clk_func, @#100		;initialize clk_func inter subroutine
+	mov #300, @#102
+	mov #1000,sp            ; stack init
+	tst -(sp)			
+		
+          ;the next peace of code initialize by input all variables - inputSTR, board, 
+		  ;nRows, nCols, maxMoves, duration (common area) and prints the static
+		  ;messages to screen.
+RowsInp:	
+	mov #RowsMSG,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	
+	mov #inputSTR,-(sp)
+	jsr pc,scanf_func			;scanf_func rows num
+	tst (sp)+
+RowsOut:
+	movb inputSTR,nRows
+	bicb chr_num_msk,nRows		;turn to number
+	
+EnterMSG:
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+
+	
+ColsInp:	
+	mov #ColsMSG,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+
+	mov #inputSTR,-(sp)
+	jsr pc,scanf_func			; scanf_func columns
+	tst (sp)+
+CollsOut:	
+	movb inputSTR,nCols
+	bic chr_num_msk,nCols			;turn to number
+
+	
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+DurationInp:
+	mov #DurMSG,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	
+	mov #inputSTR,-(sp)		;scanf_func duration , maximal amount of moves 
+	jsr pc,scanf_func 
+	tst (sp)+
+	
+		;the next peace of code use duration, maxMoves and inputSTR
+		;by common area, and writes the input duration, and max moves from the
+		;inputSTR to the coresponding labels.
+
+	mov #duration,r0		
+	mov #maxMoves,r2
+	mov #inputSTR, r4			;init ptrs
+moveDuration:			
+	cmpb (r4),#SPACE 			
+	beq skipSpace			
+	movb (r4)+,(r0)+		;mov duration input to duration label
+	br moveDuration
+skipSpace:
+	cmpb(r4)+,#SPACE			;skip the spaces between
+	beq skipSpace
+	dec r4
+MaxMOV:
+	cmpb (r4),#0			;check if inputSTR ends
+	beq EnterInp
+	movb (r4)+,(r2)+		;move max moves input to maxMoves label
+	br MaxMOV
+	
+EnterInp:	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+BoardInp:
+	mov #BoardMSG,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	
+	mov #inputSTR,-(sp)
+	jsr pc,scanf_func			;scan the board
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	
+	; BoardOutput:	
+	;the next piece of code writes the board input to board label:
+	;the input inputSTR,board and Finish label by common area
+	;and goes over the inputSTR and writes each char to the board.
+	;When the next char is F, the subr puts the index of F in Finish. 
+	
+	mov #inputSTR,r0		;points to inputSTR
+	mov #board,r1		;points to board
+EndChk:	
+    tstb (r0)			;check if end of inputSTR
+	beq MSGprint
+	cmpb (r0),#'O		;check if the char is O 
+	beq writeO
+	cmpb (r0),#'F
+	beq GetFinish
+	movb (r0)+,(r1)+
+	br EndChk
+writeO:
+	movb #'*,(r1)+		;write * instead of O
+	inc r0
+	br EndChk
+GetFinish:
+	sub #inputSTR,r0
+	mov r0,Finish
+	add #inputSTR,r0
+	movb (r0)+,(r1)+
+	br EndChk
+	
+MSGprint:	
+	mov #setMSG,-(sp)		;
+	jsr pc,printf_func
+	tst (sp)+
+	mov #duration,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #secs,-(sp)
+	jsr pc,printf_func
+	tst (sp)+	
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #MaxMvMSG,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #maxMoves,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #pMoves,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc,printf_func
+	tst (sp)+
+	mov #enter,-(sp)		;print static strings 
+	jsr pc,printf_func
+	tst (sp)+
+	mov #duration,-(sp)
+	mov #durNum,-(sp)
+	jsr pc,stringTnum			;turn duration str into a number
+	tst (sp)+
+	tst (sp)+
+	mov #maxMoves,-(sp)
+	mov #moveNum,-(sp)		;turn max moves str into a number
+	jsr pc,stringTnum
+	tst (sp)+
+	tst (sp)+
+	
+	mov #inputSTR,-(sp)		;press enter to start the game
+	jsr pc,scanf_func
+	tst (sp)+
+	mov #100,@#LCS			;turn on clk_func interrupt
+	
+		; start the game - gets board, movesArray which holds the users' moves,
+		; inputSTR which contains the input inputSTR,and some static strings to
+		; print static messeges, by common area, and also a few flag and count1
+		; labels. the subr uses printf_func and scanf_func to get and print the users'
+		; input. It scan and writes the move (if it was legal) to moves array
+		; and uses MovePiece subr to actually move the piece in the requested
+		; direction and update the game board accordingly. The subr counts the
+		; moves and end the game if the user is out of moves or the time is up.
+	
+	mov r0,-(sp)
+	mov #movesArray,r0		;r0 points to moves array throughout the entire game
+	
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+prnt_cur_board:
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #pCurr,-(sp)	;print "current board..."
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	jsr pc, printBoard	;print the board
+	
+	;print moves left str - the next peace of code use movesArray and
+	; a few static strings by common area, and prints the movesArray
+	; followed by static strings.
+	
+	mov #Moves,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #movesArray,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #maxMoves,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #movesLeft,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)			;prints static strings
+	jsr pc, printf_func
+	tst (sp)+
+	
+scanf_move:
+	clr EnterCond			;EnterCond = 0
+	mov #inputSTR,-(sp)
+	jsr pc,scanf_func		;get new move	
+	tst (sp)+
+	tst EnterCond
+	bgt MovInput		;check if user pressed enter (EnterCond == 1)
+	br TimeEnd			;if not and got here, time is up
+MovInput:
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	jsr pc, input_mov	;write the input to moves array, Cord and Dir labels for movePiece
+	jsr r5,movePiece	;move the piece in the requested direction
+	Cord
+	Dir
+	tstb (sp)+
+	bmi illegalMove		;if move was illegal, handle it
+	tst (sp)+			;clean stack
+		
+		; write move - the next piece of code use strig and movesArray by
+		; common area, and transfers the users' input to the movesArray by the
+		; requested syntax ie: (1,0,U).
+		
+	mov #inputSTR,r3		;r3 points to input inputSTR
+	movb (r3)+,r1		;get row ascii
+	cmp r0,#movesArray
+	beq first_mov
+	movb #'-,(r0)+
+	movb #76,(r0)+
+first_mov:
+	movb #'(,(r0)+
+	movb r1,(r0)+		;move the ascii to movesArray
+	movb #', , (r0)+
+spc_skp1:
+	cmpb(r3)+,#SPACE		;skip the spaces
+	beq spc_skp1
+	dec r3
+	movb (r3)+,r1		;get col ascii
+	movb r1,(r0)+		;move the ascii to movesArray
+	movb #', , (r0)+
+spc_skp2:
+	cmpb(r3)+,#SPACE		;skip the spaces
+	beq spc_skp2
+	dec r3
+	movb (r3),(r0)+		;move the ascii to movesArray
+	movb #'),(r0)+	
+	
+	
+	; check if astronaut had reached the finish point - checkSol:
+	; the subr gets the Finish label, and the board by common area, and checks
+	;if the astronaut is in the finish location on the board, if so, it raises the win game
+	;flag win_b_flag. If not, win_b_flag stays 0.
+	
+	mov r0,-(sp)
+
+	movb Finish,r0
+	cmpb board(r0),#'A
+	bne no
+	mov #1,win_b_flag
+no:	
+	mov (sp)+,r0
+	
+	tst win_b_flag
+	bgt GameWin
+	tst times_up		;check if time is up
+	bgt TimeEnd
+	dec moveNum			;decrease moves
+	ble MovesEnd		;if moves left == 0, end the game
+	jsr pc,mvsTstring	;turn moves number to str to print
+	jmp prnt_cur_board
+illegalMove:
+	tst (sp)+			;clean stack
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #pIllMove,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	
+	dec moveNum			;decrease moves left
+	beq MovesEnd		;if moves left == 0, end the game
+	jsr pc,mvsTstring	;convert moves number to str for print
+	tst moveNum			
+	br scanf_move		;if moves != 0 try again
+	
+MovesEnd:
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #pNoMoves,-(sp)	;print no more moves...
+	jsr pc, printf_func
+	tst (sp)+
+	mov (sp)+,r0
+	rts pc				;return
+TimeEnd:
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #EndMSG,-(sp)		;print out of time...
+	jsr pc, printf_func
+	tst (sp)+
+	mov (sp)+,r0
+	rts pc				;return
+
+	GameWin:
+			;print winning messege - the next piece of code use the game board,
+			;movesArray, Finish label (which contains the finish index) nd some
+			;static strings by common area. It replaces the finish square
+			;in the board with X char, prints the moves array , the board, and
+			;the static strings.
+			
+printWin:
+	mov r0,-(sp)
+	mov Finish,r0		;r0 points to finish
+	movb #'X,board(r0)	;replace astronaut with X
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #pCurr,-(sp)	;print "current board..."
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	jsr pc, printBoard	;print the board
+	mov #FinalMVS,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #movesArray,-(sp);print moves array
+	jsr pc, printf_func
+	tst (sp)+
+	mov #Enter,-(sp)
+	jsr pc, printf_func
+	tst (sp)+
+	mov #WellDone,-(sp)	;print well done...
+	jsr pc, printf_func
+	tst (sp)+
+	mov (sp)+,r0
+			
+	halt					;In
+
+;input_mov: the subr gets inputSTR , Cord(that holds the coordinate chosen by the user to move)
+;, and Dir which will hold the requested direction to move, by common area.
+;The subr goes over the inputSTR, turns the input coordinate to a number and puts 
+;it in Cord, next, it finds the requested direction in inputSTR and puts the ascii
+;in Dir.
+
+input_mov:
+	mov r1,-(sp)
+	mov r2,-(sp)
+	mov r3,-(sp)
+	mov #inputSTR,r3		;r3 points to input inputSTR
+	mov #Cord,r2		;r2 points to Cord, which will hold the coordinates
+	movb (r3)+,r1		;get row ascii
+	sub #'0,r1			;turn to number
+	movb r1,(r2)+		;move the row value to Cord
+skp_spc1:
+	cmpb(r3)+,#SPACE		;skip the spaces
+	beq skp_spc1
+	dec r3
+	movb (r3)+,r1		;get col ascii
+	sub #'0,r1			;turn to number
+	movb r1,(r2)		;move the col value to Cord
+skp_spc2:
+	cmpb(r3)+,#SPACE		;skip the spaces
+	beq skp_spc2
+	dec r3
+	movb (r3),Dir		;move direction ascii value to Dir
+	mov (sp)+,r3
+	mov (sp)+,r2
+	mov (sp)+,r1
+	rts pc
+	
+;printf_func: gets the inputSTR address to print by stack, ptr and busy
+;labels to point to the inputSTR address and indicate that the printer is busy 
+;printing. The subr uses input output trap by changing the printers' service 
+;routine to iot service routine. Once the printer is done printing, the subr
+;restores the original printer service routine, and returns.
+
+printf_func:
+	mov #1,busy			
+	mov #io_trap, @#64	;init service subr for printer interrupt
+	mov #100,@#TPS		;IE = 1
+	mov 2(sp),ptr	;get the inputSTR ptr
+	iot
+PW:
+	tst busy			;if printer busy, wait
+	bgt PW
+	mov #output_func, @#64		;return original service subr for printer interrupt
+	rts pc
+
+;io_trap: the iot service routine gets ptr and busy label by commmon area.
+;Pointer points to the inputSTR to be printed and busy indicates if the printer 
+;is busy printing.
+;The subr sends the char to be printed to TPB and if the inputSTR ended , 
+;it clears the busy flag and returns.
+
+io_trap:
+	tstb @ptr		;check inputSTR end
+	beq In
+	movb @ptr,@#TPB	;print next character
+	inc ptr
+	rti
+In:
+	clr busy			;busy = 0
+	rti
+	
+;clk_func: the clk_func service routine get count1, count2 , rate, times_up and durNum by
+;commmon area.First the service counts up to rate, and then increases the count2 
+;by one, when the count2 reaches durNum, which is the game duration that the users
+;has requested, then it raises the times_up flag, which indicates that the game time
+;is up. It then disables the clocks' interrupt enable and exits.
+
+clk_func:
+clk_l:
+	inc count1
+	cmp count1,rate	;if count1 == rate, inc inner count1
+	bge Inner
+	rti
+Inner:	
+	inc count2
+	cmp count2,durNum;if inner count1 == duration, time's up
+	bge clk_i
+	clr count1
+	rti
+clk_i:
+	mov #1,times_up		;times_up flag <- 1
+	clr @#LCS
+	rti
+	
+
+;scanf_func: the subr gets inputSTR to be printed by stack, and times_up flag by common
+;area. The subr turns on the IE of TPS, IE and RE of TKS, and waits for input
+;while actively checking the times_up flag to see if the game time is up.
+;The subr keeps track of the maximum number of chars which is r2 and if the
+;input had reached the maximum number, it returns from the subr. 
+
+scanf_func:
+	mov r1,-(sp)
+	mov r2,-(sp)		;save registers
+	mov 6(sp),r1		;r1 points to input inputSTR
+	mov #50,r2			;init max num of characters
+R:	mov #100, @#TPS		;printer IE = 1
+	mov #101, @#TKS		;keyboard IE & RE = 1
+scan:
+	wait				;wait for input
+	tst times_up
+	ble GameCon
+	mov (sp)+,r2		;restore registers
+	mov (sp)+,r1
+	rts pc
+GameCon:	tst r2				;check if reached max num  of chars
+	beq Return
+	br scan
+Return:
+	movb #0,(r1)		;end the input inputSTR with 0
+	mov (sp)+,r2		;restore registers
+	mov (sp)+,r1
+	rts pc
+	
+
+;input_func: The input service routine gets cln_mask, and EnterCond flag by common area and the input inputSTR 
+;in the register r1 (input_func is called only after scanf_func which saves the inputSTR address in r1).
+;The routine moves each input char from TKB to r3 and immediatly moves it to TPB 
+;to get the echo effect. Then, it uses cln_mask label to clear the upper irrelevant byte
+;of the saved char. It also checks if  the char is backspace, in which case it deletes
+;the last character, or if the last char is enter, in that case it ends the input
+;proccess and raises the EnterCond flag, which would indicate if the user has finished the input
+;before the time was up.The routine then writes the input to inputSTR.
+	
+input_func:
+	movb @#TKB,r3		;move input char to r3
+	movb r3,@#TPB		;echo the char
+	bic cln_mask,r3		;clean upper byte
+	cmpb r3,#BckSpce			;check if backspace entered
+	beq Delete
+	cmpb r3,#CR			;check if Enter key entered
+	beq inputEnd
+	
+	movb r3,(r1)+		;write to inputSTR
+	
+W:	
+	tstb @#TPS			;check if printer finished
+	bpl W
+	dec r2				;decrease max chars
+	inc @#TKS			;make keabord ready for new input
+	rti
+Delete:
+	tstb @#TPS			;check if printer finished					
+	bpl Delete
+	cmp r1,#inputSTR		;check if it's the first_mov char entered
+	beq First
+	dec r1				;"delete" the char from inputSTR array
+	inc r2				;increase max num of chars
+First:	
+	inc @#TKS			;make keabord ready for new input
+	rti
+inputEnd: 
+	tstb @#TPS			;check if printer finished
+	bpl inputEnd
+	mov #1,EnterCond
+	clr r2				;max num of chars = 0
+	rti
+output_func:
+	clr @#TPS			;printer interrupt subr
+	rti
+
+
+
+;mvsTstring: gets maxMoves label and moveNum by common area and converts the moveNum
+;to a inputSTR and puts it in maxMoves. In short, the subr updates maxMoves according
+;to moveNum.
+	
+mvsTstring:
+	mov r0,-(sp)
+	mov r4,-(sp)
+	mov r5,-(sp)		;save registers
+	clr r4
+	clr r5
+	clr maxMoves
+	mov moveNum,r5		;r5 points to moveNum
+	mov #maxMoves,r0	;r0 points to maxMoves
+	inc r0
+	div #8,r4			
+	tstb r4
+	beq sngl			;if r4 == 0 after division, the number is single
+	add #'0,r4			
+	add #'0,r5			;turn to ascii
+	movb r5,(r0)		
+	movb r4,-(r0)		;place the ascii in maxMoves
+	br s
+sngl:
+	add #'0,r5			;turn to ascii
+	movb r5,-(r0)		;place in maxMoves
+s:
+	mov (sp)+,r5
+	mov (sp)+,r4
+	mov (sp)+,r0		;restore registers
+	rts pc
+	
+
+;stringTnum: the subr gets the input inputSTR and a label to hold the output number by stack.
+;The subr gets the ascii from the input inputSTR and converts it into a number, and puts
+;it in the requested label.
+
+stringTnum:
+	mov r0,-(sp)
+	mov r2,-(sp)
+	mov r3,-(sp)
+	mov r4,-(sp)
+	mov 14(sp),r0	;r0 points to the inputSTR
+	clr r3
+	clr r2
+	clr r4
+ChrCount:				
+	tstb (r0)+		;count how many chars the inputSTR contains
+	beq Restor
+	inc r2
+	br ChrCount
+Restor:
+	mov 14(sp),r0	;restore ptr to the first_mov char
+	
+calculate:
+	dec r2
+	tst r2
+	beq single		;check if there's a single char
+	movb (r0)+,r4
+	sub #'0, r4		;turn to number
+	add r4,r3		;add to r3
+	mul #8,r3		;multiply r3 by 10 (8o)
+	br calculate
+single:
+	movb (r0),r4
+	sub #'0,r4		;turn to number
+	add r4,r3		
+	mov r3,@12(sp)	;move the product to the requested label
+	
+	mov (sp)+,r4
+	mov (sp)+,r3
+	mov (sp)+,r2
+	mov (sp)+,r0
+	rts pc
+
+;printBoard: the subr gets the game board, nRows and nCols by common area.
+;It goes over the board within the boundries of nRows and nCols, and prints
+;the contents until it reaches the end.
+
+printBoard:
+	mov r0,-(sp)
+	mov r1,-(sp)
+	mov r3,-(sp)
+	mov r4,-(sp)
+	mov #board,r0
+	clr r1
+	
+	
+	mov nRows,r3		
+	mul nCols,r3		;calculate board limit
+init:	
+	mov nCols, r4
+l:	
+	movb (r0)+,toPrint	;mov next char of the board to the inputSTR label
+	mov #toPrint,-(sp)	
+	jsr pc, printf_func		;print the char
+	tst (sp)+
+	dec r3
+	dec r4
+	tstb r4
+	beq entr
+	mov #space,-(sp)	;print space
+	jsr pc, printf_func
+	tst (sp)+
+	br l
+	
+entr:
+	mov #Enter,-(sp)	;print enter when we reach nCols
+	jsr pc, printf_func
+	tst (sp)+
+	tst r3
+	beq en				;if we've reached the end return
+	br init	
+en:
+	mov (sp)+,r4
+	mov (sp)+,r3
+	mov (sp)+,r1
+	mov (sp)+,r0
+	rts	 pc
+
+
+;movePiece:	gets the current location on the board and a direction, inline with the r5 register. 
+;It also gets the board, nRows and nCols by common area.It also gets the  
+;variables X and Y to hold row and col values. The routine checks the current location 
+;and direction to see if they're legal, if not it returns by stack -1 for row and -1 for col.
+;If they're legal the routine moves the piece at the given location to the given direction
+;until the robot/astronaut stumbles upon another piece. The routine returns the new coordinate
+;by stack, and updates the board according to the requested move.
+
+movePiece:	
+	mov r0,-(sp)
+	mov r1,-(sp)
+	mov r2,-(sp)
+	mov r3,-(sp)
+	mov r4,-(sp)		
+			
+	mov (r5)+,r0		;move Current coordinate address to r2
+	movb (r0)+,-(sp)	;save row value 
+	movb (r0),r3		
+	mov r3,-(sp)		;save col value
+	movb @(r5)+,r2		;move Direction value to r2
+			
+			
+CrdntCalc: 	
+	movb 2(sp),r1
+	mul nCols,r1
+	add (sp),r1			;calculate location of piece
+	mov nRows,r3
+	mul	nCols,r3		;calculate last element location in board
+	add #board,r3		;address of last element
+	add #board,r1		;address of current piece
+	cmp r1,r3
+	bgt jmpHelp			;check if location is out of bounds
+	sub #board,r1		;restore location
+	cmpb board(r1),#'B	;check if there's a block
+	beq jmpHelp
+	cmpb board(r1),#'*	;check if cord is empty
+	beq jmpHelp
+	cmpb board(r1),#'F	;check if cord is finish cord
+	beq jmpHelp
+						
+	mov #board,r0	
+	add r1,r0			;r1 contained the cord address,r0 now points to it
+	movb (r0),r3		;save the value in the cord
+	mov r0,r4			;in case thhe move is legal, r4 containts the address of the starting cord					
+DirCheck: 
+	cmpb r2,#'R
+	beq R_check
+	cmpb r2,#'D
+	beq D_check
+	cmpb r2,#'L
+	beq L_check
+	cmpb r2,#'U
+	beq U_check			;check each direction
+
+				
+R_check:	
+	inc r0
+	cmpb (r0),#'F		;check if next square is finish
+	beq R_mov
+	cmpb (r0),#'*		;check if legal cord
+	bne BadMov
+R_mov:	
+	inc (sp)			;contains col value ,counts up to nCols to check illegal move
+	cmpb (sp),nCols
+	bge BadMov
+	cmpb (r0),#'*		;if next square is not empty, check if it's the finish
+	bne cmplt_Right
+	inc r0
+	br R_mov
+cmplt_Right:	
+	cmpb (r0),#'F		;if finish, complete move
+	bne compRight		
+	inc r0
+	br R_mov
+compRight:
+	dec (sp)			;set correct col value
+	dec r0				;set correct new location
+	movb r3,(r0)		;move the piece
+	movb #'*,(r4)		;replace old location with *
+	jmp ManageStack	;return from function
+			
+jmpHelp: jmp BadMov	;br helper
+	
+D_check:	
+	add nCols,r0
+	cmpb (r0),#'F		;check if next is finish	
+	beq D_mov
+	cmpb (r0),#'*		;check if legal cord
+	bne BadMov
+D_mov:	
+	inc 2(sp)			;contains row value ,counts up to nRows to check illegal move
+	cmpb 2(sp),nRows
+	bge BadMov
+	cmpb (r0),#'*		;if next not empty, check if finish	
+	bne cmplt_mov
+	add nCols,r0		;continue moving down
+	br D_mov
+cmplt_mov:	
+	cmpb (r0),#'F		;if finish, complete move
+	bne compDown
+	add nCols,r0
+	br D_mov
+	
+compDown:	
+	dec 2(sp)			;set correct row value
+	sub nCols,r0		;set correct new location
+	movb r3,(r0)		;move the piece
+	movb #'*,(r4)		;replace old location with *
+	jmp ManageStack	;return from function
+			
+L_check:	
+	dec r0
+	cmpb (r0),#'F		;check if next is finish	
+	beq L_mov
+	cmpb (r0),#'*		;check if legal cord
+	bne BadMov
+L_mov:	
+	dec (sp)			;contains col value ,counts down to 0 to check illegal move
+	cmpb (sp),#0
+	blt BadMov
+	cmpb (r0),#'*
+	bne cmplt_left
+	dec r0
+	jmp L_mov
+cmplt_left:
+	cmpb (r0),#'F		;if finish, complete move
+	bne compLeft
+	dec r0
+	br L_mov
+compLeft:	
+	inc (sp)			;set correct col value
+	inc r0				;set correct new location
+	movb r3,(r0)		;move the piece
+	movb #'*,(r4)		;replace old location with *
+	jmp ManageStack	;return from function
+						
+U_check:	
+	sub nCols,r0
+	cmpb (r0),#'F		;check if next is finish	
+	beq U_mov
+	cmpb (r0),#'*		;check if legal cord
+	bne BadMov
+U_mov:		
+	dec 2(sp)			;contains row value ,counts down to 0 to check illegal move
+	cmpb 2(sp),#0
+	blt BadMov
+	cmpb (r0),#'*
+	bne cmplt_Up
+	sub nCols,r0
+	jmp U_mov
+cmplt_Up:
+	cmpb (r0),#'F		;if finish, complete move
+	bne compUp
+	sub nCols,r0
+	br U_mov
+compUp:		
+	inc 2(sp)			;set correct col value
+	add nCols,r0		;set correct new location
+	movb r3,(r0)		;move the piece
+	movb #'*,(r4)		;replace old location with *
+	jmp ManageStack	;return from function
+			
+			
+			
+BadMov: 	
+	tst (sp)+
+	tst (sp)+		;clear old row col values
+	mov (sp)+,r4
+	mov (sp)+,r3
+	mov (sp)+,r2
+	mov (sp)+,r1
+	mov (sp)+,r0
+			
+			
+	mov (sp)+,tmp	;save r5 original value 
+	movb #-1,-(sp)	;insert error cord to stack
+	movb #-1,-(sp)
+	mov tmp,-(sp)	;insert r5 original return
+	rts r5	
+
+ManageStack:	
+	movb (sp)+,Y
+	movb (sp)+,X
+	mov (sp)+,r4
+	mov (sp)+,r3
+	mov (sp)+,r2
+	mov (sp)+,r1
+	mov (sp)+,r0
+	mov (sp)+,tmp	
+				
+	mov Y,-(sp)
+	mov X,-(sp)
+	mov tmp,-(sp)		;arrange the stack and push the row and the col
+	rts r5				;return	
+;*********************************************************************************	
